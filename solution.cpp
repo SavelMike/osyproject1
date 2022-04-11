@@ -40,6 +40,16 @@ using namespace std;
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+typedef enum { inGetWait, inProcess, inDoneWait } sheetState_t;
+
+typedef struct
+{
+	ASheet sheet;
+	sheetState_t state;
+	cond_t condvar;
+} sheetData_t;
+
+
 class CQualityControl
 {
   public:
@@ -52,17 +62,17 @@ class CQualityControl
 	vector<thread> workThrs;
 	vector<thread> comThrsGet;
 	vector<thread> comThrsDone;
-	
-
+	vector<queue<sheetData_t>> sheetQueues;
 };
 
 // TODO: CQualityControl implementation goes here
 void workingThreadFunc(void) { }
 
-void communicationThreadGetFunc(AProductionLine& line) {
+void communicationThreadGetFunc(AProductionLine& line, queue<sheetData_t> &q) {
 
 }
-void communicationThreadDoneFunc(AProductionLine& line) {
+
+void communicationThreadDoneFunc(AProductionLine& line, queue<sheetData_t> &q) {
 
 }
 
@@ -77,8 +87,11 @@ void CQualityControl::start(int workThreads) {
 	 * Start communication threads for every production mills
 	 */
 	for (auto & m : this->rollingMills) {
-		this->comThrsGet.push_back(thread(communicationThreadGetFunc, ref(m)));
-		this->comThrsDone.push_back(thread(communicationThreadDoneFunc, ref(m)));
+		queue<sheetData_t> q;
+		this->sheetQueues.push_back(q);
+		
+		this->comThrsGet.push_back(thread(communicationThreadGetFunc, ref(m), this->sheetQueues.back()));
+		this->comThrsDone.push_back(thread(communicationThreadDoneFunc, ref(m), this->sheetQueues.back()));
 	}
 }
 
