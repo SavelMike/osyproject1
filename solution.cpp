@@ -50,8 +50,8 @@ class CQualityControl
   private:
 	vector<AProductionLine> rollingMills;
 	vector<thread> workThrs;
-	vector<thread> comThrsget;
-	vector<thread> comThrsdone;
+	vector<thread> comThrsGet;
+	vector<thread> comThrsDone;
 	
 
 };
@@ -59,8 +59,12 @@ class CQualityControl
 // TODO: CQualityControl implementation goes here
 void workingThreadFunc(void) { }
 
-void communicationThreadGetFunc() {}
-void communicationThreadDoneFunc() {}
+void communicationThreadGetFunc(AProductionLine& line) {
+
+}
+void communicationThreadDoneFunc(AProductionLine& line) {
+
+}
 
 void CQualityControl::start(int workThreads) {
 	/*
@@ -73,14 +77,21 @@ void CQualityControl::start(int workThreads) {
 	 * Start communication threads for every production mills
 	 */
 	for (auto & m : this->rollingMills) {
-		this->comThrsget.
+		this->comThrsGet.push_back(thread(communicationThreadGetFunc, ref(m)));
+		this->comThrsDone.push_back(thread(communicationThreadDoneFunc, ref(m)));
 	}
-		
-	;
 }
 
 void CQualityControl::stop(void) {
-	;
+	for (auto& w : this->workThrs) {
+		w.join();
+	}
+	for (auto& g : this->comThrsGet) {
+		g.join();
+	}
+	for (auto& d : this->comThrsDone) {
+		d.join();
+	}
 }
 
 void CQualityControl::checkAlgorithm (ASheet sheet) {
