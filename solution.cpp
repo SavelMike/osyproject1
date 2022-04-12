@@ -73,6 +73,11 @@ void workingThreadFunc(void) {
 
 void communicationThreadGetFunc(AProductionLine& line, struct sheetData** q) {
 	cout << "Communication get\n";
+	while (true) {
+		ASheet s = line->getSheet();
+		if (s == nullptr)
+			break;
+	}
 }
 
 void communicationThreadDoneFunc(AProductionLine& line, struct sheetData** q) {
