@@ -42,12 +42,13 @@ using namespace std;
 
 typedef enum { inGetWait, inProcess, inDoneWait } sheetState_t;
 
-typedef struct
+struct sheetData
 {
 	ASheet sheet;
 	sheetState_t state;
-	cond_t condvar;
-} sheetData_t;
+	condition_variable condvar;
+	struct sheetData* next;
+};
 
 
 class CQualityControl
@@ -62,18 +63,20 @@ class CQualityControl
 	vector<thread> workThrs;
 	vector<thread> comThrsGet;
 	vector<thread> comThrsDone;
-	vector<queue<sheetData_t>> sheetQueues;
+	struct sheetData** lists;
 };
 
 // TODO: CQualityControl implementation goes here
-void workingThreadFunc(void) { }
-
-void communicationThreadGetFunc(AProductionLine& line, queue<sheetData_t> &q) {
-
+void workingThreadFunc(void) {
+	cout << "Working thread\n";
 }
 
-void communicationThreadDoneFunc(AProductionLine& line, queue<sheetData_t> &q) {
+void communicationThreadGetFunc(AProductionLine& line, struct sheetData** q) {
+	cout << "Communication get\n";
+}
 
+void communicationThreadDoneFunc(AProductionLine& line, struct sheetData** q) {
+	cout << "Communication done\n";
 }
 
 void CQualityControl::start(int workThreads) {
@@ -81,17 +84,20 @@ void CQualityControl::start(int workThreads) {
 	 * start working threads
 	 */
 	for (int i = 0; i < workThreads; i++) {
+
 		this->workThrs.push_back(thread(workingThreadFunc)); 
 	}
+	int n = this->rollingMills.size();
+	this->lists = new struct sheetData*[n];
 	/*
 	 * Start communication threads for every production mills
 	 */
+	int i = 0;
 	for (auto & m : this->rollingMills) {
-		queue<sheetData_t> q;
-		this->sheetQueues.push_back(q);
-		
-		this->comThrsGet.push_back(thread(communicationThreadGetFunc, ref(m), this->sheetQueues.back()));
-		this->comThrsDone.push_back(thread(communicationThreadDoneFunc, ref(m), this->sheetQueues.back()));
+		this->lists[i] = NULL;
+		this->comThrsGet.push_back(thread(communicationThreadGetFunc, ref(m), &this->lists[i]));
+		this->comThrsDone.push_back(thread(communicationThreadDoneFunc, ref(m), &this->lists[i]));
+		i++;
 	}
 }
 
