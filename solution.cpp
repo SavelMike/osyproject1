@@ -50,6 +50,32 @@ struct sheetData
 	struct sheetData* next;
 };
 
+/*
+ * allocate new struct sheetData, add to end of list
+ */
+void addSheet(struct sheetData **list, ASheet &sheet) {
+	struct sheetData *newSheet = new struct sheetData;
+	struct sheetData *head = *list;
+
+	newSheet->sheet = sheet;
+	newSheet->state = inGetWait;
+	newSheet->next = nullptr;
+
+	/*
+	 * add newSheet to end of list
+	 * !!! critical section
+	 */
+	if (head == nullptr) {
+		/* list was empty */
+		*list = newSheet;
+		return;
+	}
+	while (head->next) {
+		head = head->next;
+	}
+	head->next = newSheet;
+}
+
 
 class CQualityControl
 {
@@ -71,20 +97,34 @@ void workingThreadFunc(void) {
 	cout << "Working thread\n";
 }
 
-void communicationThreadGetFunc(AProductionLine& line, struct sheetData** q) {
+void communicationThreadGetFunc(AProductionLine& line, struct sheetData** sheetList) {
 	cout << "Communication get\n";
 	while (true) {
 		ASheet s = line->getSheet();
 		if (s == nullptr)
 			break;
+
+		/* add ASheet to list */
+		addSheet(sheetList, s);
 	}
 }
 
-void communicationThreadDoneFunc(AProductionLine& line, struct sheetData** q) {
+/*
+ * wait until first element on \sheetList is in state Done
+ * termnate when list is empty
+ */
+void communicationThreadDoneFunc(AProductionLine& line, struct sheetData** sheetList) {
 	cout << "Communication done\n";
+	while (true) {
+		
+	}
 }
 
 void CQualityControl::start(int workThreads) {
+	int n = this->rollingMills.size();
+	this->lists = new struct sheetData*[n];
+	for (int i = 0; i < n; i++)
+		this->lists[i] = NULL;
 	/*
 	 * start working threads
 	 */
@@ -92,14 +132,11 @@ void CQualityControl::start(int workThreads) {
 
 		this->workThrs.push_back(thread(workingThreadFunc)); 
 	}
-	int n = this->rollingMills.size();
-	this->lists = new struct sheetData*[n];
 	/*
 	 * Start communication threads for every production mills
 	 */
 	int i = 0;
 	for (auto & m : this->rollingMills) {
-		this->lists[i] = NULL;
 		this->comThrsGet.push_back(thread(communicationThreadGetFunc, ref(m), &this->lists[i]));
 		this->comThrsDone.push_back(thread(communicationThreadDoneFunc, ref(m), &this->lists[i]));
 		i++;
