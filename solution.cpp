@@ -50,12 +50,18 @@ struct sheetData
 	struct sheetData* next;
 };
 
+struct listHead
+{
+	struct sheetData* first;
+	bool done;
+	condition_variable condvar;
+};
+
 /*
  * allocate new struct sheetData, add to end of list
  */
-void addSheet(struct sheetData **list, ASheet &sheet) {
+void addSheet(struct listHead *list, ASheet &sheet) {
 	struct sheetData *newSheet = new struct sheetData;
-	struct sheetData *head = *list;
 
 	newSheet->sheet = sheet;
 	newSheet->state = inGetWait;
@@ -65,15 +71,23 @@ void addSheet(struct sheetData **list, ASheet &sheet) {
 	 * add newSheet to end of list
 	 * !!! critical section
 	 */
+	struct sheetData *head = list->first;
 	if (head == nullptr) {
 		/* list was empty */
-		*list = newSheet;
+		list->first = newSheet;
 		return;
 	}
 	while (head->next) {
 		head = head->next;
 	}
 	head->next = newSheet;
+}
+
+void removeSheet(struct listHead *list) {
+	struct sheetData* next;
+	next = list->first->next;
+	delete(list->first);
+	list->first = next;
 }
 
 
@@ -89,48 +103,70 @@ class CQualityControl
 	vector<thread> workThrs;
 	vector<thread> comThrsGet;
 	vector<thread> comThrsDone;
-	struct sheetData** lists;
+	struct listHead* lists;
 };
 
 // TODO: CQualityControl implementation goes here
-void workingThreadFunc(void) {
+void workingThreadFunc(struct listHead* lists, int n) {
 	cout << "Working thread\n";
 }
 
-void communicationThreadGetFunc(AProductionLine& line, struct sheetData** sheetList) {
+void communicationThreadGetFunc(AProductionLine& line, struct listHead* sheetList) {
 	cout << "Communication get\n";
 	while (true) {
 		ASheet s = line->getSheet();
-		if (s == nullptr)
+		if (s == nullptr) {
+			// Let done thread know that no more new sheets will come
+			// !!! Critical section
+			sheetList->done = true;
 			break;
+		}
 
 		/* add ASheet to list */
 		addSheet(sheetList, s);
 	}
 }
 
+bool firstIsDoneable(struct listHead* list) {
+	if (list->first == nullptr || list->first->state != inDoneWait) {
+		return false;
+	}
+
+	return true;
+}
+
 /*
  * wait until first element on \sheetList is in state Done
  * termnate when list is empty
  */
-void communicationThreadDoneFunc(AProductionLine& line, struct sheetData** sheetList) {
+void communicationThreadDoneFunc(AProductionLine& line, struct listHead* sheetList) {
 	cout << "Communication done\n";
 	while (true) {
-		
+		// Wait until first sheet
+		// !!! Critical section
+		while (!firstIsDoneable(sheetList)) {
+//			condwait();
+		}
+		line->doneSheet(sheetList->first->sheet);
+		removeSheet(sheetList);
 	}
+	
 }
 
 void CQualityControl::start(int workThreads) {
+	// Allocate array of lists of struct sheetDatas
 	int n = this->rollingMills.size();
-	this->lists = new struct sheetData*[n];
-	for (int i = 0; i < n; i++)
-		this->lists[i] = NULL;
+	this->lists = new struct listHead[n];
+	for (int i = 0; i < n; i++) {
+		this->lists[i].first = nullptr;
+		this->lists[i].done = false;
+	}
 	/*
 	 * start working threads
 	 */
 	for (int i = 0; i < workThreads; i++) {
-
-		this->workThrs.push_back(thread(workingThreadFunc)); 
+		this->workThrs.push_back(thread(workingThreadFunc, this->lists, n));
+		
 	}
 	/*
 	 * Start communication threads for every production mills
